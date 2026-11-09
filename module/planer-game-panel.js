@@ -9,6 +9,7 @@
   } = TCM.m.core;
   const ui = TCM.m.ui;
   const troops = TCM.m.troops;
+  const settings = TCM.m.settings;
 
   // tworzy panel i zwraca funkcję pokazującą/ukrywającą go
   function create() {
@@ -26,6 +27,8 @@
     document.body.appendChild(panel);
 
     const say = ui.makeSay(panel);
+    const S = settings.load();          // ustawienia zaawansowane
+    settings.bindEditor(panel, S);
 
     const preview = () => {
       const el = panel.querySelector('#tcm-prev');
@@ -52,15 +55,29 @@
         `<tr>${cell('noble', troops.gameIcon('snob', 'Szlachta'))}</tr>`;
     }
 
+    function tabsBar() {
+      return `<div class="tcm-bar">
+          ${TABS.map(([k, n]) =>
+            `<button class="tcm-btn${k === cur ? ' tcm-btn-active' : ''}" data-act="tab" data-v="${k}">${n} (${st[k].length})</button>`).join('')}
+          <button class="tcm-btn${cur === 'settings' ? ' tcm-btn-active' : ''}" data-act="tab" data-v="settings">Ustawienia</button>
+          <button class="tcm-btn tcm-btn-red" data-act="close" style="margin-left:auto">Zamknij</button>
+        </div>`;
+    }
+
     function render() {
+      if (cur === 'settings') {
+        panel.innerHTML = `
+          <h4>Planer: ustawienia zaawansowane</h4>
+          ${tabsBar()}
+          <div>Zaznacz sekcje, które skrypt ma zapisać w planerze (po zapisie celów albo przyciskiem w planerze). Niezaznaczone sekcje nie są ruszane. Zmiany zapisują się same.</div>
+          ${settings.editorHtml(S)}
+          <div id="tcm-status"></div>`;
+        return;
+      }
       const rows = st[cur];
       panel.innerHTML = `
         <h4>Planer: cele</h4>
-        <div class="tcm-bar">
-          ${TABS.map(([k, n]) =>
-            `<button class="tcm-btn${k === cur ? ' tcm-btn-active' : ''}" data-act="tab" data-v="${k}">${n} (${st[k].length})</button>`).join('')}
-          <button class="tcm-btn tcm-btn-red" data-act="close" style="margin-left:auto">Zamknij</button>
-        </div>
+        ${tabsBar()}
         <textarea id="tcm-add" rows="2" placeholder="Wklej koordy (np. 500|499), wyłapię je z dowolnego tekstu"></textarea>
         <div class="tcm-bar">
           <button class="tcm-btn tcm-btn-green" data-act="add">Dodaj</button>
