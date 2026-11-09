@@ -36,7 +36,7 @@
     });
 
     add('Planer', async () => {
-      await TCM.need('planer-game-troops.js', 'planer-game-panel.js');
+      await TCM.need('planer-game-troops.js', 'planer-settings.js', 'planer-game-panel.js');
       if (!togglePanel) togglePanel = TCM.m.gamePanel.create();
       togglePanel();
     });
