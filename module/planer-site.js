@@ -15,7 +15,7 @@
       TCM.m.siteTroops.init(id);
     } else if (path.endsWith('/planer-form')) {
       // krok 2: Planer (cele, fejki, burzaki)
-      await TCM.need('planer-site-targets.js');
+      await TCM.need('planer-settings.js', 'planer-site-settings.js', 'planer-site-targets.js');
       TCM.m.siteTargets.init(id);
     }
   }
