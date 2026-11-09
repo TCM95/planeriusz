@@ -16,6 +16,12 @@
     ['random', 'Zaplecze losowo'], ['far', 'Zaplecze daleko'],
   ];
 
+  // budynki do burzenia: nazwy jak na stronie planera (klucze ustala strona, patrz planer-site-settings.js)
+  const BUILDINGS = [
+    'Ratusz', 'Koszary', 'Stajnia', 'Warsztat', 'Pałac', 'Kuźnia', 'Plac', 'Piedestał',
+    'Rynek', 'Tartak', 'Cegielnia', 'Huta żelaza', 'Zagroda', 'Spichlerz', 'Mur', 'Wieża Strażnicza',
+  ];
+
   const SECTIONS = [
     {
       id: 'form2', title: '1. Dostępne jednostki',
@@ -81,6 +87,7 @@
       fields: [
         { name: 'initial_outline_catapult_min_value', label: 'Min. katapult w każdym burzaku', type: 'number', def: 25, min: 1, max: 1175 },
         { name: 'initial_outline_min_ruin_attack_off', label: 'Min. jednostek w obstawie burzaka', type: 'number', def: 0, min: 0, max: 28000 },
+        { name: 'buildings', label: 'Kolejność burzenia budynków (tylko wymienione, w tej kolejności)', type: 'buildings', def: ['Zagroda', 'Ratusz', 'Kuźnia'] },
       ],
     },
   ];
@@ -98,7 +105,8 @@
       const s = saved[sec.id] || {};
       out[sec.id] = { on: !!s.on, values: {} };
       for (const f of sec.fields) {
-        out[sec.id].values[f.name] = s.values && f.name in s.values ? s.values[f.name] : f.def;
+        const v = s.values && f.name in s.values ? s.values[f.name] : f.def;
+        out[sec.id].values[f.name] = Array.isArray(v) ? v.slice() : v;
       }
     }
     return out;
@@ -108,7 +116,26 @@
 
   /* ---------- edytor (zakładka "Ustawienia" w grze) ---------- */
 
+  // lista budynków do burzenia: kolejność, przesuwanie, usuwanie, dodawanie
+  function buildingsHtml(sec, f, list) {
+    const rows = list.map((b, i) =>
+      `<div style="display:flex;align-items:center;gap:4px;margin:3px 0"><span style="flex:1">${i + 1}. ${esc(b)}</span>` +
+      `<button class="tcm-btn" data-bact="up" data-i="${i}">▲</button>` +
+      `<button class="tcm-btn" data-bact="down" data-i="${i}">▼</button>` +
+      `<button class="tcm-btn tcm-btn-red" data-bact="del" data-i="${i}">✕</button></div>`).join('');
+    const free = BUILDINGS.filter(b => !list.includes(b));
+    return `<div class="tcm-bld" data-sec="${sec.id}" data-fld="${f.name}" style="margin:6px 0">` +
+      `<div>${esc(f.label)}</div>${rows}` +
+      (free.length
+        ? `<div style="display:flex;gap:4px;margin-top:4px"><select data-badd style="flex:1">` +
+          free.map(b => `<option>${esc(b)}</option>`).join('') +
+          `</select><button class="tcm-btn tcm-btn-green" data-bact="add">Dodaj</button></div>`
+        : '') +
+      '</div>';
+  }
+
   function fieldHtml(sec, f, value) {
+    if (f.type === 'buildings') return buildingsHtml(sec, f, value);
     const at = `data-sec="${sec.id}" data-fld="${f.name}"`;
     if (f.type === 'checkbox') {
       return `<label style="display:flex;align-items:center;gap:6px;margin:6px 0">` +
@@ -169,7 +196,35 @@
     };
     panel.addEventListener('input', onEdit);
     panel.addEventListener('change', onEdit);
+
+    // lista budynków: ▲ ▼ ✕ i Dodaj
+    panel.addEventListener('click', e => {
+      const b = e.target.closest('[data-bact]');
+      if (!b) return;
+      const box = b.closest('.tcm-bld');
+      const sec = box && S[box.dataset.sec];
+      const f = box && FIELD[box.dataset.sec + '.' + box.dataset.fld];
+      if (!sec || !f) return;
+
+      const list = sec.values[f.name].slice();
+      const act = b.dataset.bact;
+      const i = parseInt(b.dataset.i, 10);
+      if (act === 'add') {
+        const sel = box.querySelector('[data-badd]');
+        if (sel && sel.value) list.push(sel.value);
+      } else if (act === 'del') {
+        if (list.length <= 1) return;                       // planer wymaga min. jednego budynku
+        list.splice(i, 1);
+      } else if (act === 'up' && i > 0) {
+        [list[i - 1], list[i]] = [list[i], list[i - 1]];
+      } else if (act === 'down' && i < list.length - 1) {
+        [list[i + 1], list[i]] = [list[i], list[i + 1]];
+      }
+      sec.values[f.name] = list;
+      save(S);
+      box.outerHTML = buildingsHtml(box.dataset.sec ? { id: box.dataset.sec } : null, f, list);
+    });
   }
 
-  TCM.m.settings = { SECTIONS, FIELD, load, save, editorHtml, bindEditor };
+  TCM.m.settings = { BUILDINGS, SECTIONS, FIELD, load, save, editorHtml, bindEditor };
 })(TCM);
