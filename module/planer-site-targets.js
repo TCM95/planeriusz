@@ -1,4 +1,4 @@
-/* planer-site-targets.js | PLANER, krok 2: wkleja cele, fejki i burzaki do okna i klika "Zapisz cele" */
+/* planer-site-targets.js | PLANER, krok 2: wkleja cele, fejki i burzaki do okna, potem zapisuje ustawienia zaawansowane */
 (function (TCM) {
   'use strict';
 
@@ -22,10 +22,10 @@
     GM_setValue('tabSum', (GM_getValue('tabSum', '') || '') + line + '<br>');
   }
 
-  // sprawdza zakładkę zapisaną tuż przed przeładowaniem; false = nie zgadza się, kolejka przerwana
+  // sprawdza zakładkę zapisaną tuż przed przeładowaniem: true = OK, false = nie zgadza się (kolejka przerwana), null = nic do sprawdzenia
   function verifyLast() {
     const last = GM_getValue('tabLast', null);
-    if (!last) return true;
+    if (!last) return null;
     GM_setValue('tabLast', null);
 
     const got = badge(last.tab);
@@ -49,6 +49,27 @@
     const say = ui.makeSay(panel);
     ui.bindFold(panel);
 
+    // ile sekcji ustawień jest włączonych w grze
+    function enabledSettings() {
+      const S = TCM.m.settings.load();
+      return TCM.m.settings.SECTIONS.filter(sec => S[sec.id].on).length;
+    }
+
+    // zapisuje ustawienia zaawansowane; wynik trafia do podsumowania, które zostaje po przeładowaniu
+    async function applySettings() {
+      const log = line => { say(line, true); note(line); };
+      say('Zapisuję ustawienia zaawansowane...');
+      try {
+        const ok = await TCM.m.siteSettings.apply(log);
+        if (ok !== null) {
+          say(ok ? 'Zapisano. Odświeżam stronę...' : 'Coś się nie zgadza, zostaję na stronie.', true);
+          if (ok) setTimeout(() => location.reload(), 1200);
+        }
+      } catch (err) {
+        log('<span class="tcm-err">Błąd ustawień: ' + esc(err) + '</span>');
+      }
+    }
+
     function render() {
       const inPlaner = [...document.querySelectorAll('.t-tab-teal .badge')].map(b => b.textContent).join(' / ');
       panel.innerHTML = `
@@ -60,7 +81,12 @@
           <div class="tcm-bar">${TABS.map(([k, n]) =>
             `<button class="tcm-btn${k === cur ? ' tcm-btn-active' : ''}" data-act="tab" data-v="${k}">${n} (${st[k].length})</button>`).join('')}</div>
           <textarea id="tcm-prev" rows="5" readonly>${esc(buildTab(st, cur))}</textarea>
-          <div class="tcm-bar"><button class="tcm-btn tcm-btn-green" data-act="start">Wklej i zapisz cele</button></div>
+          <div>Ustawienia zaawansowane do zapisu: ${enabledSettings()} sekcji (włączasz je w grze: Planer, zakładka Ustawienia).</div>
+          <div class="tcm-bar"><label><input type="checkbox" data-opt="autoSettings"${GM_getValue('optSettings', true) ? ' checked' : ''}> po celach zapisz ustawienia zaawansowane</label></div>
+          <div class="tcm-bar">
+            <button class="tcm-btn tcm-btn-green" data-act="start">Wklej i zapisz cele</button>
+            <button class="tcm-btn tcm-btn-blue" data-act="settings">Zapisz same ustawienia</button>
+          </div>
           <div id="tcm-status">${GM_getValue('tabSum', '') || ''}</div>
         </div>`;
     }
@@ -75,6 +101,7 @@
       GM_setValue('tabSum', '');
       GM_setValue('tabLast', null);
       GM_setValue('tabQueue', tabs);
+      GM_setValue('settingsPending', GM_getValue('optSettings', true) ? id : '');
       step();
     }
 
@@ -113,17 +140,29 @@
       if (!b) return;
       if (b.dataset.act === 'tab') { cur = b.dataset.v; render(); }
       else if (b.dataset.act === 'start') fill();
+      else if (b.dataset.act === 'settings') { GM_setValue('tabSum', ''); applySettings(); }
+    });
+
+    panel.addEventListener('change', e => {
+      const t = e.target;
+      if (t.dataset && t.dataset.opt === 'autoSettings') GM_setValue('optSettings', t.checked);
     });
 
     // wynik poprzedniego zapisu najpierw, dopiero potem render (żeby pokazał podsumowanie)
-    const ok = verifyLast();
+    const verdict = verifyLast();
     render();
+    const queue = GM_getValue('tabQueue', []) || [];
 
     if (pending) {
       GM_setValue('pendingTargets', '');
       setTimeout(fill, 600);
-    } else if (ok && (GM_getValue('tabQueue', []) || []).length) {
+    } else if (verdict === false) {
+      GM_setValue('settingsPending', '');
+    } else if (queue.length) {
       setTimeout(step, 600);
+    } else if (verdict === true && GM_getValue('settingsPending', '') === id) {
+      GM_setValue('settingsPending', '');
+      setTimeout(applySettings, 600);
     }
   }
 
